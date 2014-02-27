@@ -5,15 +5,16 @@ using namespace std;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	Mat img = imread("MyPic.JPG", CV_LOAD_IMAGE_UNCHANGED);
+	Mat easyCaptchaImage = imread("images/easy.png", CV_LOAD_IMAGE_UNCHANGED);
 	
-	if (img.empty()) {
+	if (easyCaptchaImage.empty()) {
 		cout << "Error: Image cannot be loaded!" << endl;
+		cin.get();
 		return -1;
 	}
 	
 	namedWindow("MyWindow", CV_WINDOW_AUTOSIZE);
-	imshow("MyWindow", img);
+	imshow("MyWindow", easyCaptchaImage);
 	
 	waitKey(0);
 	
