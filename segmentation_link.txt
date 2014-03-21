@@ -1,0 +1,6 @@
+blog paper :
+http://blog.damiles.com/2010/12/segmentation-and-feature-extraction-contours-and-blob-detection/
+
+
+source code :
+https://github.com/damiles/Segmentation-Tutorial/blob/master/main.c
