@@ -1,0 +1,55 @@
+#include "stdafx.h"
+
+using namespace cv;
+using namespace std;
+
+
+int threshold_value = 0;
+int threshold_type = 3;;
+int const max_value = 255;
+int const max_type = 4;
+int const max_BINARY_value = 255;
+
+Mat src, src_gray, dst;
+char* window_name = "Threshold Demo";
+
+char* trackbar_type = "Type: \n 0: Binary \n 1: Binary Inverted \n 2: Truncate \n 3: To Zero \n 4: To Zero Inverted";
+char* trackbar_value = "Value";
+
+/// Function headers
+void Threshold_Demo(int, void*);
+
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+	Mat easyCaptchaImage = imread("images/easy.png", CV_LOAD_IMAGE_UNCHANGED);
+	
+	if (easyCaptchaImage.empty()) {
+		cout << "Error: Image cannot be loaded!" << endl;
+		cin.get();
+		return -1;
+	}
+	
+	namedWindow("MyWindow", CV_WINDOW_AUTOSIZE);
+	imshow("MyWindow", easyCaptchaImage);
+	
+	waitKey(0);
+	
+	destroyWindow("MyWindow");
+	
+	return 0;
+}
+
+void Threshold_Demo(int, void*)
+{
+	/* 0: Binary
+	1: Binary Inverted
+	2: Threshold Truncated
+	3: Threshold to Zero
+	4: Threshold to Zero Inverted
+	*/
+
+	threshold(src_gray, dst, threshold_value, max_BINARY_value, threshold_type);
+
+	imshow(window_name, dst);
+}
