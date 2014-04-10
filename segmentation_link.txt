@@ -4,3 +4,6 @@ http://blog.damiles.com/2010/12/segmentation-and-feature-extraction-contours-and
 
 source code :
 https://github.com/damiles/Segmentation-Tutorial/blob/master/main.c
+
+Char squeleton algorythm :
+http://opencv-code.com/quick-tips/implementation-of-thinning-algorithm-in-opencv/
