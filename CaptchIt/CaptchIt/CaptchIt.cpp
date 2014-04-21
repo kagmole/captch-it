@@ -9,10 +9,14 @@
 //#include <sys/param.h>
 
 #include "opencv2/ml/ml.hpp"          // opencv machine learning include file
+
+#pragma warning (disable : 4996)
 #include <stdio.h>
 
 #define ATTRIBUTES 256  //Number of pixels per sample.16X16
 #define CLASSES 10                  //Number of distinct labels.
+#define TRAINING_SAMPLES 3050       //Number of samples in training dataset
+#define TEST_SAMPLES 1170       //Number of samples in test dataset
 
 using namespace cv;
 using namespace std;
@@ -274,60 +278,263 @@ void parseDataset(std::string datasetPath, int sampleNumber, std::string outputf
 	file.close();
 }
 
+void read_dataset(char *filename, cv::Mat &data, cv::Mat &classes, int total_samples)
+{
+
+	int label;
+	float pixelvalue;
+	//open the file
+	FILE* inputfile = fopen(filename, "r");
+
+	//read each row of the csv file
+	for (int row = 0; row < total_samples; row++)
+	{
+		//for each attribute in the row
+		for (int col = 0; col <= ATTRIBUTES; col++)
+		{
+			//if its the pixel value.
+			if (col < ATTRIBUTES){
+
+				fscanf(inputfile, "%f,", &pixelvalue);
+				data.at<float>(row, col) = pixelvalue;
+
+			}//if its the label
+			else if (col == ATTRIBUTES){
+				//make the value of label column in that row as 1.
+				fscanf(inputfile, "%i", &label);
+				classes.at<float>(row, label) = 1.0;
+
+			}
+		}
+	}
+
+	fclose(inputfile);
+}
+
+void loadDataToMat(int pixelArray[], cv::Mat &data)
+{
+	for (int col = 0; col < ATTRIBUTES; ++col)
+	{
+		data.at<float>(0, col) = (float) pixelArray[col];
+	}
+}
+
 
 int _tmain(int argc, _TCHAR* argv[])
 {
 	size_t size;
 
 	std::string datasetPath = "Z:\\Documents\\Modules HE-Arc\\3252 - Imagerie numérique\\3252.2 Traitement d'image\\Captch-it\\CaptchIt\\Dataset";
-
-	system("PAUSE");
-
+	string trainingPath = datasetPath + "\\trainingset.txt";
+	string testPath = datasetPath + "\\testset.txt";
+	string networkPath = datasetPath + "\\param.xml";
+	/*
+	 * READ TRAINING SET
+	 * Create file with all training set
+	 */
 	cout << "Reading the training set......\n";
 	//parseDataset(datasetPath, 305, datasetPath + "\\trainingset.txt");
 
-
-	system("PAUSE");
-
+	/*
+	 * READ TEST SET
+	 * Create file with all test set
+	 */
 	cout << "Reading the test set.........\n";
 	//parseDataset(datasetPath, 130, datasetPath + "\\testset.txt");
 
-	system("PAUSE");
+	/*
+	 * TRAIN NEURAL NETWORK
+	 */
 
-	//read the model from the XML file and create the neural network.
-	std::string neuralNetworkParameters = datasetPath + "\\param.xml";
-	CvANN_MLP nnetwork;
-	int imageDataPixelValue[256];
-	imageToPixelValue(datasetPath + "\\Sample5\\162.png", imageDataPixelValue);
-	CvFileStorage* storage = cvOpenFileStorage(neuralNetworkParameters.c_str(), 0, CV_STORAGE_READ);
-	CvFileNode *n = cvGetFileNodeByName(storage, 0, "DigitOCR");
-	nnetwork.read(storage, n);
+	//matrix to hold the training sample
+	cv::Mat training_set(TRAINING_SAMPLES, ATTRIBUTES, CV_32F);
+	//matrix to hold the labels of each taining sample
+	cv::Mat training_set_classifications(TRAINING_SAMPLES, CLASSES, CV_32F);
+	//matric to hold the test samples
+	cv::Mat test_set(TEST_SAMPLES, ATTRIBUTES, CV_32F);
+	//matrix to hold the test labels.
+	cv::Mat test_set_classifications(TEST_SAMPLES, CLASSES, CV_32F);
+
+	//
+	cv::Mat classificationResult(1, CLASSES, CV_32F);
+	//load the training and test data sets.
+	read_dataset((char*)trainingPath.c_str(), training_set, training_set_classifications, TRAINING_SAMPLES);
+	read_dataset((char*)testPath.c_str(), test_set, test_set_classifications, TEST_SAMPLES);
+
+	// define the structure for the neural network (MLP)
+	// The neural network has 3 layers.
+	// - one input node per attribute in a sample so 256 input nodes
+	// - 16 hidden nodes
+	// - 10 output node, one for each class.
+
+	cv::Mat layers(3, 1, CV_32S);
+	layers.at<int>(0, 0) = ATTRIBUTES;//input layer
+	layers.at<int>(1, 0) = 16;//hidden layer
+	layers.at<int>(2, 0) = CLASSES;//output layer
+
+	//create the neural network.
+	//for more details check http://docs.opencv.org/modules/ml/doc/neural_networks.html
+	CvANN_MLP nnetwork(layers, CvANN_MLP::SIGMOID_SYM, 0.6, 1);
+
+	CvANN_MLP_TrainParams params(
+
+		// terminate the training after either 1000
+		// iterations or a very small change in the
+		// network wieghts below the specified value
+		cvTermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 1000, 0.000001),
+		// use backpropogation for training
+		CvANN_MLP_TrainParams::BACKPROP,
+		// co-efficents for backpropogation training
+		// recommended values taken from http://docs.opencv.org/modules/ml/doc/neural_networks.html#cvann-mlp-trainparams
+		0.1,
+		0.1);
+
+	// train the neural network (using training data)
+
+	printf("\nUsing training dataset\n");
+	int iterations = nnetwork.train(training_set, training_set_classifications, cv::Mat(), cv::Mat(), params);
+	printf("Training iterations: %i\n\n", iterations);
+
+	// Save the model generated into an xml file.
+	CvFileStorage* storage = cvOpenFileStorage((char*) networkPath.c_str(), 0, CV_STORAGE_WRITE);
+	nnetwork.write(storage, "DigitOCR");
 	cvReleaseFileStorage(&storage);
 
-	//string stringPixelValue = pixelValueToString(imageDataPixelValue);
+	// Test the generated model with the test samples.
+	cv::Mat test_sample;
+	//count of correct classifications
+	int correct_class = 0;
+	//count of wrong classifications
+	int wrong_class = 0;
 
-	cv::Mat data(1, ATTRIBUTES, CV_32F, &imageDataPixelValue);
+	//classification matrix gives the count of classes to which the samples were classified.
+	int classification_matrix[CLASSES][CLASSES] = { {} };
 
-	// Generate cv::Mat data(1,ATTRIBUTES,CV_32S) which will contain the pixel data for the digit to be recognized
+	// for each sample in the test set.
+	for (int tsample = 0; tsample < TEST_SAMPLES; tsample++) {
 
-	int maxIndex = 0;
-	cv::Mat classOut(1, CLASSES, CV_32F); // CV_32F
-	//prediction
-	nnetwork.predict(data, classOut);
-	float value;
-	float maxValue = classOut.at<float>(0, 0);
-	for (int index = 1; index<CLASSES; index++)
-	{
-		value = classOut.at<float>(0, index);
-		if (value>maxValue)
+		// extract the sample
+
+		test_sample = test_set.row(tsample);
+
+		//try to predict its class
+
+		nnetwork.predict(test_sample, classificationResult);
+		// The classification result matrix holds weightage  of each class.
+		// we take the class with the highest weightage as the resultant class
+
+		// find the class with maximum weightage.
+		int maxIndex = 0;
+		float value = 0.0f;
+		float maxValue = classificationResult.at<float>(0, 0);
+		for (int index = 1; index<CLASSES; index++)
 		{
-			maxValue = value;
-			maxIndex = index;
+			value = classificationResult.at<float>(0, index);
+			if (value>maxValue)
+			{
+				maxValue = value;
+				maxIndex = index;
+
+			}
+		}
+
+		printf("Testing Sample %i -> class result (digit %d)\n", tsample, maxIndex);
+
+		//Now compare the predicted class to the actural class. if the prediction is correct then\
+		            //test_set_classifications[tsample][ maxIndex] should be 1.
+		//if the classification is wrong, note that.
+		if (test_set_classifications.at<float>(tsample, maxIndex) != 1.0f)
+		{
+			// if they differ more than floating point error => wrong class
+
+			wrong_class++;
+
+			//find the actual label 'class_index'
+			for (int class_index = 0; class_index<CLASSES; class_index++)
+			{
+				if (test_set_classifications.at<float>(tsample, class_index) == 1.0f)
+				{
+
+					classification_matrix[class_index][maxIndex]++;// A class_index sample was wrongly classified as maxindex.
+					break;
+				}
+			}
+
+		}
+		else {
+
+			// otherwise correct
+
+			correct_class++;
+			classification_matrix[maxIndex][maxIndex]++;
 		}
 	}
 
-	cout << maxValue << endl;
-	cout << maxIndex << endl;
+	printf("\nResults on the testing dataset\n"
+		"\tCorrect classification: %d (%g%%)\n"
+		"\tWrong classifications: %d (%g%%)\n",
+		correct_class, (double)correct_class * 100 / TEST_SAMPLES,
+		wrong_class, (double)wrong_class * 100 / TEST_SAMPLES);
+	cout << "   ";
+	for (int i = 0; i < CLASSES; i++)
+	{
+		cout << i << "\t";
+	}
+	cout << "\n";
+	for (int row = 0; row<CLASSES; row++)
+	{
+		cout << row << "  ";
+		for (int col = 0; col<CLASSES; col++)
+		{
+			cout << classification_matrix[row][col] << "\t";
+		}
+		cout << "\n";
+	}
+
+	/*
+	 * TEST NEURAL NETWORK
+	 */
+	for (int charIndex = 1; charIndex < 11; ++charIndex)
+	{
+		cout << "--- " << charIndex << " --------------------------------" << endl;
+
+		//read the model from the XML file and create the neural network.
+		std::string neuralNetworkParameters = datasetPath + "\\param.xml";
+		CvANN_MLP nnetwork;
+		int imageDataPixelValue[256];
+		imageToPixelValue(datasetPath + "\\Sample" + intToString(charIndex) + "\\1.png", imageDataPixelValue);
+		CvFileStorage* storage = cvOpenFileStorage((char*) neuralNetworkParameters.c_str(), 0, CV_STORAGE_READ);
+		CvFileNode *n = cvGetFileNodeByName(storage, 0, "DigitOCR");
+		nnetwork.read(storage, n);
+		cvReleaseFileStorage(&storage);
+
+		cv::Mat data(1, ATTRIBUTES, CV_32F);
+
+		loadDataToMat(imageDataPixelValue, data);
+
+		// Generate cv::Mat data(1,ATTRIBUTES,CV_32F) which will contain the pixel data for the digit to be recognized
+		//cv::Mat data(1, ATTRIBUTES, CV_32F, &imageDataPixelValue);
+
+		int maxIndex = 0;
+		cv::Mat classOut(1, CLASSES, CV_32F);
+
+		// Prediction
+		nnetwork.predict(data, classOut);
+		float value;
+		float maxValue = classOut.at<float>(0, 0);
+		for (int index = 1; index<CLASSES; index++)
+		{
+			value = classOut.at<float>(0, index);
+			//cout << "Classe:" << index << " - Probability : " << value << endl;
+			if (value>maxValue)
+			{
+				maxValue = value;
+				maxIndex = index;
+			}
+		}
+
+		cout << "Classe:" << maxIndex << " - Probability : " << maxValue << endl;
+	}
 	
 	system("PAUSE");
 	return 0;
